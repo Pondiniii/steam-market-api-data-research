@@ -24,7 +24,7 @@ def connect(number):
     # 0-170
     locations = [    "Besa",    "Fergese",    "Tango",    "Lofty",    "Oval",    "Bad Koala",    "Good Koala",    "Port Phillip",    "Yarra",    "Herdsman",    "Kings Park",    "Opera House",    "Squidney",    "Boltzmann",    "Hofburg",    "Guildhouse",    "Pisanica",    "Burek",    "Mercadao",    "Pinacoteca",    "Nevski",    "Botum Pagoda",    "Crosby",    "Bagel Poutine",    "Expo 67",    "Comfort Zone",    "The 6",    "Granville",    "Stanley",    "Vansterdam",    "Cueca",    "Rololandia",    "Tkalciceva",    "Blue Lagoon",    "Staromak",    "Vltava",    "LEGO",    "Cuy",    "Lennujaam",    "Station",    "Sauna",    "Tram",    "La Marseillaise",    "Jardin",    "Seine",    "Ghvino",    "Castle",    "Wurstchen",    "Best Jollof",    "Odeon",    "Phooey",    "Victoria",    "Danube",    "Fuzzy Pony",    "Reyka",    "Mahim",    "Chole Bhature",    "Ancol",    "Old Town",    "Dullahan",    "Grafton",    "Yam Park",    "Duomo",    "Galleria",    "Colosseum",    "Shinkansen",    "Wabi-sabi",    "Sigiria",    "Daugava",    "Saeima",    "Neris",    "Chemin",    "Perdana",    "Aqueduct",    "Dendrarium",    "Bicycle",    "Canal",    "Red Light",    "Tulip",    "Hauraki",    "Parnell",    "Vardar",    "Fjord",    "Papers",    "Amaru",    "Pasig",    "Motlawa",    "Curie",    "Vistula",    "Bairro",    "No Vampires",    "Goodbye Lenin",    "Hermitage",    "Shnur",    "Rakia",    "Garden",    "Marina Bay",    "SMRT",    "Devin Castle",    "District",    "Lindfield",    "Springbok",    "Han River",    "Hangang",    "Batllo",    "Prado",    "Djurgarden",    "Ikea",    "Syndrome",    "Alphorn",    "Altstadt",    "Lindenhof",    "Datong",    "Hangover",    "Lumphini",    "Galata",    "Lygos",    "Ghost",    "Khalifa",    "Keeper Willie",    "Biscuits",    "Crumpets",    "Custard",    "United",    "Mountain",    "Piedmont",    "BBQ",    "Ranch",    "Trinity",    "Barley",    "Space City",    "Glinda",    "Harvard",    "MIT",    "Bill",    "Earnhardt",    "Cub",    "Wrigley",    "Brown",    "Coney Dog",    "Florida Man",    "Snow",    "Vice",    "Empire",    "Grand Central",    "Insomnia",    "Tofu Driver",    "Fresh Prince",    "Sunny",    "Hawkins",    "Cuban Sandwich",    "Precedent",    "Oregon Trail",    "Casino",    "Cube",    "Dogg",    "Lamar",    "Pac",    "Floatie",    "Sanitation",    "Santana",    "Inside",    "Cobain",    "Cornell",    "Hendrix",    "Red River",    "Mansbridge",    "Kaiju",    "The Tube",    "Radiohall"]
 
-    command = [r'C:\Program Files\Windscribe\windscribe-cli.exe', 'connect', locations[number]]
+    command = [r'windscribe-cli', 'connect', locations[number]]
 
     subprocess.run(command)
 
@@ -33,11 +33,15 @@ def connect(number):
 
 def connect_random():
     connect(random.randint(0,170))
+
+
 def disconnect():
-    command = [r'C:\Program Files\Windscribe\windscribe-cli.exe', 'disconnect']
+    command = [r'windscribe-cli', 'disconnect']
 
     subprocess.run(command)
 
-connect_random()
 
+if __name__ == "__main__":
+    connect_random()
+    check_internet_connection(10)
 
