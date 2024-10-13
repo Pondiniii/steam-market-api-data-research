@@ -2,7 +2,7 @@ import requests
 import json
 
 def gen_market_link(start, count):
-    return f"https://steamcommunity.com/market/listings/730/AK-47%20%7C%20Redline%20(Field-Tested)/render?start={start}&count={count}&currency=1&format=json"
+    return f"https://steamcommunity.com/market/listings/730/Desert%20Eagle%20%7C%20Heat%20Treated%20%28Factory%20New%29/render?start={start}&count={count}&currency=1&format=json"
 
 
 def responce_parser(response):
