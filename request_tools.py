@@ -33,7 +33,7 @@ if __name__ == "__main__":
     response = requests.get(url)
     with open('response-rate-limit.json', 'w') as file:
         json.dump(response.json(), file, indent=4)
-    len(response.json())
-    print(response['total_count']) # zwraca ile jest ofert na steam market czyli można podzielić przez 100 = ilość requestów do wykonania 100 to maksymalna ilość danych w response od steam api
+    print(response.json())
+    #print(response['total_count']) 
     listings = responce_parser(response)
     print(listings)

@@ -3,14 +3,23 @@ from secrets import db_secrets
 
 
 
-
-def check_listing_in_db(listing_id, connection):
+def should_process_listing(listing_id, connection):
     cursor = connection.cursor()
-    query = "SELECT EXISTS(SELECT 1 FROM listings WHERE listing_id = %s)"
+    query = "SELECT paint_seed FROM listings WHERE listing_id = %s"
     cursor.execute(query, (listing_id,))
-    exists = cursor.fetchone()[0]
+    result = cursor.fetchone()
     cursor.close()
-    return exists
+    if result is not None:
+        paint_seed = result[0]
+        if paint_seed is None:
+            # Listing exists but paint_seed is NULL, need to process
+            return True
+        else:
+            # Listing exists and paint_seed is not NULL, skip processing
+            return False
+    else:
+        # Listing does not exist, need to process
+        return True
 
 
 def insert_listing_into_db(listing, connection):
@@ -18,23 +27,20 @@ def insert_listing_into_db(listing, connection):
     asset_id = listing['asset_id']
     price = listing['price']
     inspection_link = listing['inspection_link']
-    paint_seed = None  # Zainicjuj z None, na późniejsze uzupełnienie
+    paint_seed = None  # Initialize with None, to be updated later
 
-    # Sprawdź czy listing_id istnieje już w bazie
-    if not check_listing_in_db(listing_id, connection):
-        cursor = connection.cursor()
+    cursor = connection.cursor()
 
-        query = """
-        INSERT INTO listings (listing_id, asset_id, price, inspection_link, paint_seed)
-        VALUES (%s, %s, %s, %s, %s)
-        """
-        cursor.execute(query, (listing_id, asset_id, price, inspection_link, paint_seed))
-        connection.commit()
+    query = """
+    INSERT INTO listings (listing_id, asset_id, price, inspection_link, paint_seed)
+    VALUES (%s, %s, %s, %s, %s)
+    ON CONFLICT (listing_id) DO NOTHING
+    """
+    cursor.execute(query, (listing_id, asset_id, price, inspection_link, paint_seed))
+    connection.commit()
 
-        cursor.close()
-        print(f"Zapisano nowe dane: {listing_id}, {asset_id}, {price}, {inspection_link}")
-    else:
-        print(f"Dane już istnieją w bazie: {listing_id}")
+    cursor.close()
+    print(f"Inserted or skipped existing listing: {listing_id}")
 
 
 if __name__ == "__main__":
