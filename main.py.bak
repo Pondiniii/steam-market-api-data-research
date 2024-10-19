@@ -8,8 +8,9 @@ import time
 import urllib.parse
 import asyncio
 from telegram import Bot
+
+# Import additional modules
 import traceback
-import re  
 
 def main():
     # Define the list of qualities to process
@@ -17,9 +18,6 @@ def main():
     
     # Initialize error backoff timer
     error_backoff = 30 * 60  # Start with 30 minutes in seconds
-
-    # Define the item name (since you're only scraping Desert Eagle | Heat Treated)
-    item_name = 'Desert Eagle | Heat Treated'
 
     while True:
         try:
@@ -35,6 +33,7 @@ def main():
                 
                 # Make the initial request to get total_count
                 response = requests.get(url)
+                
                 if response.status_code != 200:
                     print(f"Error fetching data from {url}")
                     continue  # Skip to the next quality
@@ -97,38 +96,36 @@ def main():
                             price_dollars = price_cents / 100  # Convert to dollars
                             
                             # Construct the Steam market link for the listing
-                            market_link = construct_market_link(item_name, quality)
+                            market_link = construct_market_link(listing_id, quality)
                             
-                            # Escape variables to prevent Markdown parsing issues
-                            listing_id_escaped = str(listing_id)
-                            paint_seed_escaped = str(paint_seed)
-                            quality_escaped = quality
-                            market_link_escaped = market_link
-                            item_name_escaped = item_name
-
+                            # Create the message with improved formatting
                             message = (
-                                f"Oferta <b>{listing_id}</b> \nPaint Seed: <b>{paint_seed}</b>\n"
-                                f"Jakość: <i>{quality}</i>\n"
-                                f"Link: <a href=\"{market_link}\">Steam Market</a>\n"
-                                f"Cena: <b>{price_dollars}</b>$"
+                                f"Oferta **{listing_id}** spełnia kryteria z paint_seed **{paint_seed}**.\n"
+                                f"Jakość: *{quality}*\n"
+                                f"Link: [Steam Market]({market_link})\n"
+                                f"Cena: **${price_dollars:.2f}**"
                             )
-
                             print(message)
                             send_telegram_message(message)
-
+                        
                         # Rate limit for paint_seed API
                         time.sleep(fetch_paint_seed_rate_limit())
                     
                     # Move to the next page
                     start += count
             
+            # Close the database connection
             connection.close()
             
-            error_backoff = 30 * 60
+            # Reset error backoff timer after successful run
+            error_backoff = 30 * 60  # Reset to 30 minutes
+
+            # Sleep for a while before the next full run (optional)
+            # time.sleep(300)  # Sleep for 5 minutes before the next run
+
         except Exception as e:
             # Print the error for debugging
             print(f"An error occurred: {e}")
-            send_telegram_message(str(e))
             traceback.print_exc()
             
             # Wait for the error backoff timer before retrying
@@ -138,17 +135,19 @@ def main():
             # Increase the backoff timer by 30 minutes for the next potential error
             error_backoff += 30 * 60
 
+# Implement rate limit for Steam
 steam_last_request_time = 0
 def steam_rate_limit():
     global steam_last_request_time
     current_time = time.time()
     elapsed_time = current_time - steam_last_request_time
-    if elapsed_time < 2:
-        sleep_time = 2 - elapsed_time
+    if elapsed_time < 30:
+        sleep_time = 30 - elapsed_time
         print(f"Waiting {sleep_time:.2f} seconds before the next Steam API request.")
         time.sleep(sleep_time)
     steam_last_request_time = time.time()
 
+# Implement rate limit for fetch_paint_seed
 fetch_paint_seed_last_request_time = 0
 def fetch_paint_seed_rate_limit():
     global fetch_paint_seed_last_request_time
@@ -190,8 +189,8 @@ def fetch_paint_seed(inspection_link):
         return None
 
 def meets_criteria(paint_seed):
-    numbers = [490, 148, 109, 116, 134, 158, 163, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 801, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 911, 925, 942, 946, 951, 953, 970, 998]
-    return True# paint_seed in numbers
+    numbers = [490, 148, 109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
+    return paint_seed in numbers
 
 # Implement the function to send a notification via Telegram
 async def send_telegram_message_async(message):
@@ -200,7 +199,7 @@ async def send_telegram_message_async(message):
         await bot.send_message(
             chat_id=chat_id,
             text=message,
-            parse_mode='HTML',
+            parse_mode='Markdown',  # Enable Markdown formatting
             disable_web_page_preview=False
         )
     except Exception as e:
@@ -227,16 +226,24 @@ def should_process_listing(listing_id, connection):
         # Listing does not exist, need to process
         return True
 
-def construct_market_link(item_name, quality):
-    # Construct the Steam market link for the specific item and quality
+def construct_market_link(listing_id, quality):
+    # Construct the Steam market link for the specific listing and quality
     base_url = "https://steamcommunity.com/market/listings/730/"
-    # Combine item name and quality
-    item_name_with_quality = f"{item_name} ({quality})"
-    # URL-encode the item name with quality
-    item_name_encoded = urllib.parse.quote(item_name_with_quality, safe='')
-    full_url = f"{base_url}{item_name_encoded}"
+    # Map quality to the tag used in the URL
+    quality_tags = {
+        'Factory New': 'FN',
+        'Minimal Wear': 'MW',
+        'Field-Tested': 'FT',
+        'Well-Worn': 'WW',
+        'Battle-Scarred': 'BS'
+    }
+    # You may need to adjust the item name and URL encoding based on your needs
+    item_name = "Your+Item+Name"  # Replace with the actual item name
+    quality_tag = quality_tags.get(quality, '')
+    full_url = f"{base_url}{item_name} ({quality})"
+    # URL encode the full URL
+    full_url = urllib.parse.quote(full_url, safe=':/()?=&')
     return full_url
-
 
 if __name__ == "__main__":
     main()
