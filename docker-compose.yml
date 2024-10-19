@@ -1,0 +1,35 @@
+services:
+  deagle-db:
+    image: postgres:latest
+    container_name: deagle
+    environment:
+      POSTGRES_USER: deagle
+      POSTGRES_PASSWORD: deagle
+      POSTGRES_DB: deagle
+    ports:
+      - "5432:5432"
+    volumes:
+      - deagle_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  csgofloat:
+    image: step7750/csgofloat:master
+    container_name: csgofloat
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - csgofloat_config:/config
+    networks:
+      - app-network
+
+networks:
+  app-network:
+
+volumes:
+  deagle_data:
+    name: deagle_data
+  csgofloat_config:
+    name: csgofloat_config
+
