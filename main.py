@@ -9,63 +9,92 @@ import urllib.parse
 import asyncio
 from telegram import Bot
 
+
 def main():
     # Connect to the database
     connection = psycopg2.connect(**db_secrets)
     
-    # For development purposes, we're processing only the first page
     start = 0
     count = 100  # Maximum number of listings per request
-    url = gen_market_link(start, count)
     
-    # Implement rate limit for Steam (1 request per minute)
-    steam_rate_limit()
+    # Generate the URL for the first page to get total count
+    url = gen_market_link(start, count, 'Battle-Scarred')
     
+    # Make the initial request to get total_count
     response = requests.get(url)
+    with open('response-rate-limit.json', 'w') as file:
+        json.dump(response.json(), file, indent=4)
     if response.status_code != 200:
         print(f"Error fetching data from {url}")
         return
-    print(response)
-    with open('response-rate-limit.json', 'w') as file:
-        json.dump(response.json(), file, indent=4)
-    print(response['total_count'])
-    print(json.*
-    # Parse the response
-    listings = responce_parser(response)
     
-    # Process each listing individually
-    for listing in listings:
-        listing_id = listing['listing_id']
+    total_count = response.json().get('total_count', 0)
+    if total_count == 0:
+        print("No listings found.")
+        return
+    
+    # Calculate max_pages based on total_count and count
+    max_pages = (total_count + count - 1) // count  # round up
+    
+    print(f"Total listings: {total_count}. Total pages to process: {max_pages}")
+    
+    # Now we loop through all the pages
+    for page in range(max_pages):
+        # Update the URL for the current page
+        url = gen_market_link(start, count, 'Battle-Scarred')
         
-        # Check if we should process this listing
-        if not should_process_listing(listing_id, connection):
-            print(f"Skipping listing {listing_id}, already processed.")
-            continue
+        # Rate limit to avoid spamming Steam
+        steam_rate_limit()
         
-        # Insert the listing into the database if it doesn't exist
-        insert_listing_into_db(listing, connection)
+        response = requests.get(url)
+        if response.status_code != 200:
+            print(f"Error fetching data from {url}")
+            return
         
-        # Fetch paint_seed for this listing
-        paint_seed = fetch_paint_seed(listing['inspection_link'])
-        print(f"Paint seed for listing {listing_id}: {paint_seed}")
+        # Parse the response and process listings
+        listings = responce_parser(response)
         
-        # Update the database with the fetched paint_seed
-        cursor = connection.cursor()
-        cursor.execute("UPDATE listings SET paint_seed = %s WHERE listing_id = %s", (paint_seed, listing_id))
-        connection.commit()
-        cursor.close()
+        if not listings:
+            print("No more listings found.")
+            break  # Exit loop if no more listings are found
         
-        # Check criteria and send notification
-        if paint_seed is not None and meets_criteria(paint_seed):
-            message = f"Oferta {listing_id} spełnia kryteria z paint_seed {paint_seed}. {listing['inspection_link']} cena = {listing['price']}"
-            print(message)
-            send_telegram_message(message)
+        # Process each listing
+        for listing in listings:
+            listing_id = listing['listing_id']
+            
+            if not should_process_listing(listing_id, connection):
+                print(f"Skipping listing {listing_id}, already processed.")
+                continue
+            
+            # Insert the listing into the database
+            insert_listing_into_db(listing, connection)
+            
+            # Fetch paint_seed for this listing
+            paint_seed = fetch_paint_seed(listing['inspection_link'])
+            print(f"Paint seed for listing {listing_id}: {paint_seed}")
+            
+            # Update the database with the fetched paint_seed
+            cursor = connection.cursor()
+            cursor.execute("UPDATE listings SET paint_seed = %s WHERE listing_id = %s", (paint_seed, listing_id))
+            connection.commit()
+            cursor.close()
+            
+            # Send notification if the paint_seed meets criteria
+            if paint_seed is not None and meets_criteria(paint_seed):
+                message = f"Oferta {listing_id} spełnia kryteria z paint_seed {paint_seed}. {listing['inspection_link']} cena = {listing['price']}"
+                print(message)
+                send_telegram_message(message)
+            
+            # Rate limit for paint_seed API
+            time.sleep(fetch_paint_seed_rate_limit())
         
-        # Wait to avoid exceeding the rate limit of the paint_seed API
-        time.sleep(fetch_paint_seed_rate_limit())
+        # Move to the next page
+        start += count
     
     # Close the database connection
     connection.close()
+
+
 
 # Implement rate limit for Steam
 steam_last_request_time = 0
@@ -85,7 +114,7 @@ def fetch_paint_seed_rate_limit():
     global fetch_paint_seed_last_request_time
     current_time = time.time()
     elapsed_time = current_time - fetch_paint_seed_last_request_time
-    min_interval = 60 / 8  # 8 requests per minute
+    min_interval = 60 / 30  # 8 requests per minute
     if elapsed_time < min_interval:
         sleep_time = min_interval - elapsed_time
         print(f"Waiting {sleep_time:.2f} seconds before the next csinventory API request.")
@@ -95,23 +124,28 @@ def fetch_paint_seed_rate_limit():
         fetch_paint_seed_last_request_time = current_time
         return 0
 
+
 def fetch_paint_seed(inspection_link):
-    # Fetch paint_seed from the API with rate limiting
-    api_key = api_secrets['paint_seed_api_key']
+    # Zakodowanie linku inspect do użycia w Twoim API
     encoded_link = urllib.parse.quote(inspection_link, safe='')
-    api_url = f"https://csinventoryapi.com/api/v1/inspect?api_key={api_key}&url={encoded_link}"
+    # Twój lokalny adres API (lub ten, na którym działa Twoje API)
+    api_url = f"http://localhost:80/?url={encoded_link}"
     
-    print(f"Sending request to csinventory API: {api_url}")
+    print(f"Wysyłanie zapytania do Twojego API: {api_url}")
     response = requests.get(api_url)
     
     if response.status_code != 200:
         print(f"Error fetching paint_seed for {inspection_link}")
         return None
+    
     data = response.json()
+    # Zwracamy tylko paint_seed z odpowiedzi, jeśli jest dostępny
     if 'iteminfo' in data and 'paintseed' in data['iteminfo']:
         return data['iteminfo']['paintseed']
     else:
+        print(f"No paint_seed found for {inspection_link}")
         return None
+
 
 def meets_criteria(paint_seed):
     numbers = [490, 148, 109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
