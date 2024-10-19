@@ -3,15 +3,20 @@ import requests
 import psycopg2
 from secrets import db_secrets, api_secrets, bot_token, chat_id
 from database import insert_listing_into_db
-from request_tools import gen_market_link, responce_parser
+from request_tools import gen_market_link, response_parser
 import time
 import urllib.parse
 import asyncio
 from telegram import Bot
 import traceback
-import re  
+from proxy_tools import get_proxies
+import threading
+
 
 def main():
+    global current_proxies
+    current_proxies = get_proxies()
+    threading.Thread(target=update_proxies, daemon=True).start()
     # Define the list of qualities to process
     qualities = ['Battle-Scarred', 'Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn']
     
@@ -23,22 +28,22 @@ def main():
 
     while True:
         try:
-            # Connect to the database
             connection = psycopg2.connect(**db_secrets)
-            
             for quality in qualities:
                 start = 0
-                count = 100  # Maximum number of listings per request
-                
-                # Generate the URL for the first page to get total count
+                count = 100
                 url = gen_market_link(start, count, quality)
                 
-                # Make the initial request to get total_count
-                response = requests.get(url)
-                if response.status_code != 200:
-                    print(f"Error fetching data from {url}")
-                    continue  # Skip to the next quality
-                
+
+                for proxy in current_proxies:
+                    response = requests.get(url, proxies=proxy, timeout=10)
+                    if response is None or response.status_code != 200:
+                        print(f"Error fetching data from {url} with proxy {proxy}, trying next proxy.")
+                        continue 
+                    else:
+                        break  
+
+        
                 total_count = response.json().get('total_count', 0)
                 if total_count == 0:
                     print(f"No listings found for quality '{quality}'.")
@@ -63,7 +68,7 @@ def main():
                         continue  # Skip to the next page
                     
                     # Parse the response and process listings
-                    listings = responce_parser(response)
+                    listings = response_parser(response)
                     
                     if not listings:
                         print("No more listings found.")
@@ -82,6 +87,8 @@ def main():
                         
                         # Fetch paint_seed for this listing
                         paint_seed = fetch_paint_seed(listing['inspection_link'])
+                        if paint_seed == None:
+                            raise ValueError("Paint Seed is None - check self-hosted API")
                         print(f"Paint seed for listing {listing_id} (Quality: {quality}): {paint_seed}")
                         
                         # Update the database with the fetched paint_seed
@@ -140,11 +147,12 @@ def main():
 
 steam_last_request_time = 0
 def steam_rate_limit():
+    # rate limit teraz to 5 sekund przed kolejnym zapytaniem
     global steam_last_request_time
     current_time = time.time()
     elapsed_time = current_time - steam_last_request_time
-    if elapsed_time < 2:
-        sleep_time = 2 - elapsed_time
+    if elapsed_time < 5:
+        sleep_time = 5 - elapsed_time
         print(f"Waiting {sleep_time:.2f} seconds before the next Steam API request.")
         time.sleep(sleep_time)
     steam_last_request_time = time.time()
@@ -191,7 +199,7 @@ def fetch_paint_seed(inspection_link):
 
 def meets_criteria(paint_seed):
     numbers = [490, 148, 109, 116, 134, 158, 163, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 801, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 911, 925, 942, 946, 951, 953, 970, 998]
-    return True# paint_seed in numbers
+    return paint_seed in numbers
 
 # Implement the function to send a notification via Telegram
 async def send_telegram_message_async(message):
@@ -236,6 +244,13 @@ def construct_market_link(item_name, quality):
     item_name_encoded = urllib.parse.quote(item_name_with_quality, safe='')
     full_url = f"{base_url}{item_name_encoded}"
     return full_url
+
+def update_proxies():
+    global current_proxies
+    while True:
+        current_proxies = get_proxies()  # Pobiera nową listę proxy
+        print("Lista proxy odnowiona.")
+        time.sleep(30 * 60)  # Co 30 minut
 
 
 if __name__ == "__main__":

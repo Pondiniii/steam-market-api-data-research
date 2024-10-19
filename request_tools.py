@@ -5,7 +5,7 @@ def gen_market_link(start, count, quality):
     return f"https://steamcommunity.com/market/listings/730/Desert%20Eagle%20%7C%20Heat%20Treated%20%28{quality}%29/render?start={start}&count={count}&currency=1&format=json"
 
 
-def responce_parser(response):
+def response_parser(response):
     response = response.json()
     listing_info = response['listinginfo']
     listings = []
@@ -42,5 +42,5 @@ if __name__ == "__main__":
         json.dump(response.json(), file, indent=4)
     print(response.json())
     #print(response['total_count']) 
-    listings = responce_parser(response)
+    listings = response_parser(response)
     print(listings)
