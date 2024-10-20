@@ -63,7 +63,7 @@ def main():
                     steam_rate_limit()
                     
                     for _ in range(5):  # Wykonaj maksymalnie 5 prób
-                        response = requests.get(url)
+                        response = requests.get(url, proxies=proxy, timeout=10)
                         if response.status_code == 200:
                             break  
                         print(f"Error fetching data from {url}, retrying in 5 minutes...")
