@@ -7,8 +7,8 @@
 - [x] IP change per request
 - [x] API for checking paint seed
 - [x] Steam API rate limit
-- [ ] Stability testing
-- [ ] code cleanup 
+- [x] Stability testing
+- [x] code cleanup 
 - [ ] better documentation / readme - what is this project etc...
 ---
 ### postgres docker commands: 
