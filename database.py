@@ -39,7 +39,6 @@ def insert_listing_into_db(listing, connection):
     connection.commit()
 
     cursor.close()
-    print(f"Inserted or skipped existing listing: {listing_id}")
 
 
 if __name__ == "__main__":
