@@ -113,14 +113,12 @@ def main():
                             market_link_escaped = market_link
                             item_name_escaped = item_name
                             inspect_link = str(listing['inspection_link'])
-
                             message = (
                             f"Oferta <b>{listing_id}</b> \n"
                             f"Paint Seed: <b>{paint_seed}</b> | Cena: <b>{price_dollars}</b>$\n"
                             f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
-                            f"<a href=\"{inspect_link}\">Inspect link</a>"
+                            f"Inspect link: {inspect_link}"
                             )
-
                             print(message)
                             send_telegram_message(message)
 
