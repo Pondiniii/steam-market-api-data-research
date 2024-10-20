@@ -2,7 +2,6 @@ import psycopg2
 from secrets import db_secrets 
 
 
-
 def should_process_listing(listing_id, connection):
     cursor = connection.cursor()
     query = "SELECT paint_seed FROM listings WHERE listing_id = %s"

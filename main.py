@@ -1,5 +1,6 @@
 import requests
 import psycopg2
+import logging
 from secrets import db_secrets, bot_token, chat_id, webshare_proxy_api_key
 from database import insert_listing_into_db
 from request_tools import gen_market_link, response_parser
@@ -11,9 +12,8 @@ import traceback
 import threading
 import random
 
-
 def main():
-    # Error timerStart with 30 min jail time
+    # Error timer starts with 30 min jail time
     error_backoff = 30 * 60
     paint_seed = None
     response = None
@@ -31,14 +31,14 @@ def main():
                     try:
                         response = requests.get(url, proxies=proxy, timeout=10)
                         if response.status_code == 200:
-                            print("Successfully fetched data.")
+                            logging.info("Successfully fetched data.")
                             break
                     except requests.exceptions.ProxyError:
-                        print(f"Proxy error with {proxy}, trying next proxy.")
+                        logging.warning(f"Proxy error with {proxy}, trying next proxy.")
                     except requests.exceptions.ConnectTimeout:
-                        print(f"Timeout with proxy {proxy}, trying next proxy.")
+                        logging.warning(f"Timeout with proxy {proxy}, trying next proxy.")
                     except Exception as e:
-                        print(f"Other error: {e}")
+                        logging.error(f"Other error: {e}")
                     time.sleep(60)
 
                 if response.status_code != 200:
@@ -49,7 +49,7 @@ def main():
                     raise ValueError(f"No listings found for quality '{quality}'.")
 
                 max_pages = (total_count + count - 1) // count
-                print(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
+                logging.info(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
 
                 for page in range(max_pages):
                     url = gen_market_link(start, count, quality)
@@ -59,21 +59,21 @@ def main():
                         try:
                             response = requests.get(url, proxies=proxy, timeout=10)
                             if response.status_code == 200:
-                                print("Successfully fetched data.")
+                                logging.info("Successfully fetched data.")
                                 break
                         except requests.exceptions.ProxyError:
-                            print(f"Proxy error with {proxy}, trying next proxy.")
+                            logging.warning(f"Proxy error with {proxy}, trying next proxy.")
                         except requests.exceptions.ConnectTimeout:
-                            print(f"Timeout with proxy {proxy}, trying next proxy.")
+                            logging.warning(f"Timeout with proxy {proxy}, trying next proxy.")
                         except Exception as e:
-                            print(f"Other error: {e}")
+                            logging.error(f"Other error: {e}")
                         time.sleep(60)
                     if response.status_code != 200:
                         raise ValueError(f"Failed to fetch data from {url} after 5 retries")
 
                     listings = response_parser(response)
                     if not listings:
-                        print("No more listings found.")
+                        logging.info("No more listings found.")
                         break  # Exit loop if no more listings are found
 
                     should_skip_remaining_pages = False
@@ -82,7 +82,7 @@ def main():
                         price_cents = int(listing['price'])
                         price_dollars = price_cents / 100
                         if price_dollars > 100:
-                            print(f"Price {price_dollars} exceeds $100, skipping remaining listings and pages for quality {quality}")
+                            logging.info(f"Price {price_dollars} exceeds $100, skipping remaining listings and pages for quality {quality}")
                             should_skip_remaining_pages = True
                             break
 
@@ -97,6 +97,8 @@ def main():
                         if paint_seed is None:
                             raise ValueError("Paint Seed is None after 5 retries")
 
+                        logging.info(
+                            f"{listing}")
                         insert_listing_into_db(listing, connection)
                         cursor = connection.cursor()
                         cursor.execute("UPDATE listings SET paint_seed = %s WHERE listing_id = %s", (paint_seed, listing_id))
@@ -105,7 +107,11 @@ def main():
 
                         if paint_seed is not None and meets_criteria(paint_seed):
                             market_link = construct_market_link('Desert Eagle | Heat Treated', quality)
-                            rank2 = [109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
+                            rank2 = [109, 116, 134, 158, 168, 225, 338, 354, 356, 365,
+                                     370, 386, 406, 426, 433, 441, 483, 537, 542, 592,
+                                     607, 611, 651, 668, 673, 696, 730, 743, 820, 846,
+                                     856, 857, 870, 876, 878, 882, 898, 900, 925, 942,
+                                     946, 951, 953, 970, 998]
                             rank_name = "rank2" if paint_seed in rank2 else "rank1"
 
                             message = (
@@ -119,38 +125,61 @@ def main():
 
                         time.sleep(fetch_paint_seed_rate_limit())
 
-                    # if price < 100$ then skip checking rest to save requests bandwidth
                     if should_skip_remaining_pages:
                         break
 
                     # Move to the next page
                     start += count
-            
+
             connection.close()
             error_backoff = 30 * 60
 
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logging.error(f"An error occurred: {e}")
             send_telegram_message(str(e))
             traceback.print_exc()
-            
+
             # Wait for the error backoff timer before retrying
-            print(f"Waiting {error_backoff / 60} minutes before retrying due to error.")
+            logging.info(f"Waiting {error_backoff / 60} minutes before retrying due to error.")
             time.sleep(error_backoff)
-            
+
             # Increase the backoff timer by 30 minutes for the next potential error
             error_backoff += 30 * 60
 
 
+class CustomFormatter(logging.Formatter):
+    # Define color codes
+    RESET = "\x1b[0m"
+    COLOR_CODES = {
+        logging.DEBUG: "\x1b[36m",   # Cyan
+        logging.INFO: "\x1b[32m",    # Green
+        logging.WARNING: "\x1b[33m", # Yellow
+        logging.ERROR: "\x1b[31m",   # Red
+        logging.CRITICAL: "\x1b[41m",# Red background
+    }
+
+    def format(self, record):
+        color_code = self.COLOR_CODES.get(record.levelno, self.RESET)
+        message = super().format(record)
+        return f"{color_code}{message}{self.RESET}"
+
+# Set up logging with the custom formatter
+handler = logging.StreamHandler()
+handler.setFormatter(CustomFormatter('%(asctime)s [%(levelname)s]: %(message)s'))
+logger = logging.getLogger()
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
+
 steam_last_request_time = 0
 def steam_rate_limit():
-    # rate limit in seconds before next request - new request every 5 sec
+    # Rate limit: new request every 5 seconds
     global steam_last_request_time
     current_time = time.time()
     elapsed_time = current_time - steam_last_request_time
     if elapsed_time < 5:
         sleep_time = 5 - elapsed_time
-        print(f"Waiting {sleep_time:.2f} seconds before the next Steam API request.")
+        logging.info(f"Waiting {sleep_time:.2f} seconds before the next Steam API request.")
         time.sleep(sleep_time)
     steam_last_request_time = time.time()
 
@@ -163,7 +192,7 @@ def fetch_paint_seed_rate_limit():
     min_interval = 60 / 30  # 30 requests per minute
     if elapsed_time < min_interval:
         sleep_time = min_interval - elapsed_time
-        print(f"Waiting {sleep_time:.2f} seconds before the next local API request.")
+        logging.info(f"Waiting {sleep_time:.2f} seconds before the next local API request.")
         fetch_paint_seed_last_request_time = current_time + sleep_time
         return sleep_time
     else:
@@ -177,24 +206,31 @@ def fetch_paint_seed(inspection_link):
         api_url = f"http://localhost:80/?url={encoded_link}"
         response = requests.get(api_url)
         if response.status_code != 200:
-            print(f"Error fetching paint_seed for {inspection_link}")
+            logging.error(f"Error fetching paint_seed for {inspection_link}")
             return None
-        
+
         data = response.json()
         # Return only the paint_seed from the response if available
         if 'iteminfo' in data and 'paintseed' in data['iteminfo']:
             return data['iteminfo']['paintseed']
         else:
-            print(f"No paint_seed found for {inspection_link}")
+            logging.error(f"No paint_seed found for {inspection_link}")
             return None
 
     except Exception as e:
-        print(f"Error in fetch_paint_seed: {e}")
+        logging.error(f"Error in fetch_paint_seed: {e}")
         return None
 
 
 def meets_criteria(paint_seed):
-    numbers = [490, 148, 69, 704, 16, 48, 66, 67, 96, 111, 117, 159, 259, 263, 273, 297, 308, 321, 324, 341, 347, 461, 482, 517, 530, 567, 587, 674, 695, 723, 764, 772, 781, 790, 792, 843, 880, 885, 904, 948, 990, 109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
+    numbers = [490, 148, 69, 704, 16, 48, 66, 67, 96, 111, 117, 159,
+               259, 263, 273, 297, 308, 321, 324, 341, 347, 461, 482,
+               517, 530, 567, 587, 674, 695, 723, 764, 772, 781, 790,
+               792, 843, 880, 885, 904, 948, 990, 109, 116, 134, 158,
+               168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433,
+               441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696,
+               730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898,
+               900, 925, 942, 946, 951, 953, 970, 998]
     return paint_seed in numbers
 
 
@@ -208,7 +244,7 @@ async def send_telegram_message_async(message):
             disable_web_page_preview=False
         )
     except Exception as e:
-        print(f"Error sending message: {e}")
+        logging.error(f"Error sending message: {e}")
 
 
 def send_telegram_message(message):
@@ -258,7 +294,7 @@ def get_proxies():
             proxies_list.append(proxy_format)
         return proxies_list
     else:
-        print(f"Error: {response.status_code}")
+        logging.error(f"Error fetching proxies: {response.status_code}")
         return []
 
 
@@ -268,11 +304,10 @@ def update_proxies():
     current_proxies = get_proxies()
     while True:
         current_proxies = get_proxies()
-        print("Lista proxy odnowiona.")
-        time.sleep(30 * 60)  # Aktualizacja co 30 minut
+        logging.info("Proxy list updated.")
+        time.sleep(30 * 60)  # Update every 30 minutes
 
 
 if __name__ == "__main__":
     threading.Thread(target=update_proxies, daemon=True).start()
     main()
-
