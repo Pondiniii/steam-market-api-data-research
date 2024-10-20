@@ -11,12 +11,17 @@ from telegram import Bot
 import traceback
 from proxy_tools import get_proxies
 import threading
+import random
 
+def update_proxies():
+    current_proxies = get_proxies()
+    global current_proxies 
+    while True:
+        current_proxies = get_proxies() 
+        print("Lista proxy odnowiona.")
+        time.sleep(30 * 60)  # Aktualizacja co 30 minut
 
 def main():
-    global current_proxies
-    current_proxies = get_proxies()
-    threading.Thread(target=update_proxies, daemon=True).start()
     # Define the list of qualities to process
     qualities = ['Battle-Scarred', 'Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn']
     
@@ -35,13 +40,23 @@ def main():
                 url = gen_market_link(start, count, quality)
                 
 
-                for proxy in current_proxies:
-                    response = requests.get(url, proxies=proxy, timeout=10)
-                    if response is None or response.status_code != 200:
-                        print(f"Error fetching data from {url} with proxy {proxy}, trying next proxy.")
-                        continue 
-                    else:
-                        break  
+                for _ in range(5):
+                    proxy = random.choice(current_proxies)
+                    try:
+                        response = requests.get(url, proxies=proxy, timeout=10)
+                        if response.status_code == 200:
+                            print("Successfully fetched data.")
+                            break
+                    except requests.exceptions.ProxyError:
+                        print(f"Proxy error with {proxy}, trying next proxy.")
+                    except requests.exceptions.ConnectTimeout:
+                        print(f"Timeout with proxy {proxy}, trying next proxy.")
+                    except Exception as e:
+                        print(f"Other error: {e}")
+                    time.sleep(60)
+
+                if response.status_code != 200:
+                    raise ValueError(f"Failed to fetch data from {url} after 5 retries")
 
         
                 total_count = response.json().get('total_count', 0)
@@ -62,15 +77,24 @@ def main():
                     # Rate limit to avoid spamming Steam
                     steam_rate_limit()
                     
-                    for _ in range(5):  # Wykonaj maksymalnie 5 prób
-                        response = requests.get(url, proxies=proxy, timeout=10)
-                        if response.status_code == 200:
-                            break  
-                        print(f"Error fetching data from {url}, retrying in 5 minutes...")
-                        time.sleep(60)  
+                    for _ in range(5):
+                        proxy = random.choice(current_proxies)
+                        try:
+                            response = requests.get(url, proxies=proxy, timeout=10)
+                            if response.status_code == 200:
+                                print("Successfully fetched data.")
+                                break
+                        except requests.exceptions.ProxyError:
+                            print(f"Proxy error with {proxy}, trying next proxy.")
+                        except requests.exceptions.ConnectTimeout:
+                            print(f"Timeout with proxy {proxy}, trying next proxy.")
+                        except Exception as e:
+                            print(f"Other error: {e}")
+                        time.sleep(60)
 
                     if response.status_code != 200:
                         raise ValueError(f"Failed to fetch data from {url} after 5 retries")
+
 
                     # Parse the response and process listings
                     listings = response_parser(response)
@@ -264,14 +288,9 @@ def construct_market_link(item_name, quality):
     full_url = f"{base_url}{item_name_encoded}"
     return full_url
 
-def update_proxies():
-    global current_proxies
-    while True:
-        current_proxies = get_proxies()  # Pobiera nową listę proxy
-        print("Lista proxy odnowiona.")
-        time.sleep(30 * 60)  # Co 30 minut
 
 
 if __name__ == "__main__":
+    threading.Thread(target=update_proxies, daemon=True).start()
     main()
 
