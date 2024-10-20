@@ -62,11 +62,16 @@ def main():
                     # Rate limit to avoid spamming Steam
                     steam_rate_limit()
                     
-                    response = requests.get(url)
+                    for _ in range(5):  # Wykonaj maksymalnie 5 prób
+                        response = requests.get(url)
+                        if response.status_code == 200:
+                            break  
+                        print(f"Error fetching data from {url}, retrying in 5 minutes...")
+                        time.sleep(60)  
+
                     if response.status_code != 200:
-                        print(f"Error fetching data from {url}")
-                        continue  # Skip to the next page
-                    
+                        raise ValueError(f"Failed to fetch data from {url} after 5 retries")
+
                     # Parse the response and process listings
                     listings = response_parser(response)
                     
@@ -97,19 +102,17 @@ def main():
                         # Insert the listing into the database
                         insert_listing_into_db(listing, connection)
                         
-                        retries = 0
-
-                        while retries < 5:
+                        for _ in range(5):  # Wykonaj maksymalnie 5 prób
                             paint_seed = fetch_paint_seed(listing['inspection_link'])
                             if paint_seed is not None:
                                 break  # Jeśli paint_seed jest prawidłowy, przerywamy pętlę
-                            retries += 1
                             time.sleep(60)  # Czekamy 60 sekund przed kolejną próbą
 
                         if paint_seed is None:
                             raise ValueError("Paint Seed is None after 5 retries")
+
                         print(f"Paint seed for listing {listing_id} (Quality: {quality}): {paint_seed}")
-                        
+
                         # Update the database with the fetched paint_seed
                         cursor = connection.cursor()
                         cursor.execute("UPDATE listings SET paint_seed = %s WHERE listing_id = %s", (paint_seed, listing_id))
