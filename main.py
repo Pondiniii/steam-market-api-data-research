@@ -114,13 +114,18 @@ def main():
                         if paint_seed is not None and meets_criteria(paint_seed):
                             # Cena jest na pewno ≤ 100$, więc nie musimy tego sprawdzać
                             market_link = construct_market_link(item_name, quality)
-                            
+                            rank2 = [109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
+
+                            # Sprawdzenie, do którego rankingu należy paint_seed
+                            rank_name = "rank2" if paint_seed in rank2 else "rank1"
+
                             message = (
                                 f"Oferta <b>{listing_id}</b> \n"
-                                f"Paint Seed: <b>{paint_seed}</b> | Cena: <b>{price_dollars}</b>$\n"
+                                f"Paint Seed: <b>{paint_seed}</b> ({rank_name}) | Cena: <b>{price_dollars}</b>$\n"
                                 f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
                                 f"Inspect link: {listing['inspection_link']}"
                             )
+
                             print(message)
                             send_telegram_message(message)
                         
