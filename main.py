@@ -78,7 +78,6 @@ def main():
                     should_skip_remaining_pages = False
 
                     # Process each listing
-                    # Process each listing
                     for listing in listings:
                         # Format the price
                         price_cents = int(listing['price'])
@@ -98,10 +97,17 @@ def main():
                         # Insert the listing into the database
                         insert_listing_into_db(listing, connection)
                         
-                        # Fetch paint_seed for this listing
-                        paint_seed = fetch_paint_seed(listing['inspection_link'])
-                        if paint_seed == None:
-                            raise ValueError("Paint Seed is None - check self-hosted API")
+                        retries = 0
+
+                        while retries < 5:
+                            paint_seed = fetch_paint_seed(listing['inspection_link'])
+                            if paint_seed is not None:
+                                break  # Jeśli paint_seed jest prawidłowy, przerywamy pętlę
+                            retries += 1
+                            time.sleep(60)  # Czekamy 60 sekund przed kolejną próbą
+
+                        if paint_seed is None:
+                            raise ValueError("Paint Seed is None after 5 retries")
                         print(f"Paint seed for listing {listing_id} (Quality: {quality}): {paint_seed}")
                         
                         # Update the database with the fetched paint_seed
