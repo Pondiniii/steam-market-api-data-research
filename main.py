@@ -112,12 +112,13 @@ def main():
                             quality_escaped = quality
                             market_link_escaped = market_link
                             item_name_escaped = item_name
+                            inspect_link = str(listing['inspection_link'])
 
                             message = (
-                                f"Oferta <b>{listing_id}</b> \nPaint Seed: <b>{paint_seed}</b>\n"
-                                f"Jakość: <i>{quality}</i>\n"
-                                f"Link: <a href=\"{market_link}\">Steam Market</a>\n"
-                                f"Cena: <b>{price_dollars}</b>$"
+                            f"Oferta <b>{listing_id}</b> \n"
+                            f"Paint Seed: <b>{paint_seed}</b> | Cena: <b>{price_dollars}</b>$\n"
+                            f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
+                            f"<a href=\"{inspect_link}\">Inspect link</a>"
                             )
 
                             print(message)
@@ -198,7 +199,7 @@ def fetch_paint_seed(inspection_link):
         return None
 
 def meets_criteria(paint_seed):
-    numbers = [490, 148, 109, 116, 134, 158, 163, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 801, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 911, 925, 942, 946, 951, 953, 970, 998]
+    numbers = [490, 148, 69, 704, 16, 48, 66, 67, 96, 111, 117, 159, 259, 263, 273, 297, 308, 321, 324, 341, 347, 461, 482, 517, 530, 567, 587, 674, 695, 723, 764, 772, 781, 790, 792, 843, 880, 885, 904, 948, 990, 109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
     return paint_seed in numbers
 
 # Implement the function to send a notification via Telegram
