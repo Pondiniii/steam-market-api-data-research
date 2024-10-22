@@ -316,9 +316,9 @@ def get_rank(paint_seed):
 
 def get_suggested_price(rank, quality):
     suggested_prices = {
-        0: {'Factory New': 300, 'Minimal Wear': 150, 'Field-Tested': 120, 'Well-Worn': 100, 'Battle-Scarred': 100},
-        1: {'Factory New': 80, 'Minimal Wear': 70, 'Field-Tested': 60, 'Well-Worn': 50, 'Battle-Scarred': 50},
-        2: {'Factory New': 60, 'Minimal Wear': 50, 'Field-Tested': 40, 'Well-Worn': 30, 'Battle-Scarred': 30}
+        0: {'Factory New': 500, 'Minimal Wear': 250, 'Field-Tested': 200, 'Well-Worn': 150, 'Battle-Scarred': 100},
+        1: {'Factory New': 100, 'Minimal Wear': 80, 'Field-Tested': 70, 'Well-Worn': 60, 'Battle-Scarred': 50},
+        2: {'Factory New': 60, 'Minimal Wear': 50, 'Field-Tested': 40, 'Well-Worn': 30, 'Battle-Scarred': 20}
     }
     price = suggested_prices.get(rank, {}).get(quality)
     if price is None:
