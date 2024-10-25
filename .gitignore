@@ -1,6 +1,11 @@
+steampy/
 *.tar
 __pycache__
 env/
 .idea
 secrets.py
 venv/
+autobuy.py
+cookies.json
+main.py.bak
+secret.json

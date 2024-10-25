@@ -11,116 +11,119 @@ from telegram import Bot
 import traceback
 import threading
 
+# Blokada synchronizująca dostęp do funkcji `get_next_proxy`
+proxy_lock = threading.Lock()
 
-def main():
+# Lista jakości do przetworzenia
+qualities = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle-Scarred']
+
+
+def get_proxied_request(url):
+    sleep_time = 5
+    total_count = 0
+    response = None
+    for _ in range(10):
+        proxy = get_next_proxy()
+        try:
+            response = requests.get(url, proxies=proxy, timeout=10)
+            total_count = response.json().get('total_count', 0)
+            if response.status_code == 200 and total_count != 0:
+                logging.info(f"Successfully fetched data {total_count}")
+                break
+
+            if response.status_code != 200:
+                raise ValueError(f"Failed to fetch data from {url} after 5 retries")
+
+        except requests.exceptions.ProxyError:
+            logging.warning(f"Proxy error with {proxy}, trying next proxy.")
+        except requests.exceptions.ConnectTimeout:
+            logging.warning(f"Timeout with proxy {proxy}, trying next proxy.")
+        except Exception as e:
+            logging.error(f"Other error: {e}")
+
+        time.sleep(sleep_time)
+        sleep_time += 5
+
+    return response, total_count
+
+
+
+def process_quality(quality):
     # Error timer starts with 30 min jail time
     error_backoff = 30 * 60
     paint_seed = None
-    response = None
 
     while True:
         try:
             connection = psycopg2.connect(**db_secrets)
-            for quality in ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle-Scarred']:
-                start = 0
-                count = 100
+            # for quality in ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle-Scarred']:
+            start = 0
+            count = 100
+            page = 0
+            max_pages = 1
+            price_dollars = None
+            while page < max_pages:
                 url = gen_market_link(start, count, quality)
+                # steam_rate_limit()
+                response, total_count = get_proxied_request(url)
+                if page == 0:
+                    max_pages = (total_count + count - 1) // count
+                    logging.info(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
 
-                sleep_time = 5
-                for _ in range(10):
-                    proxy = get_next_proxy()
-                    try:
-                        response = requests.get(url, proxies=proxy, timeout=10)
-                        if response.status_code == 200:
-                            logging.info("Successfully fetched data.")
+                listings = response_parser(response)
+                if not listings:
+                    logging.info("No more listings found.")
+                    break  # Exit loop if no more listings are found
+
+                for listing in listings:
+                    listing_id = listing['listing_id']
+                    price_cents = int(listing['price'])
+                    price_dollars = price_cents / 100
+
+                    if price_dollars > 300:
+                        break
+
+                    if not should_process_listing(listing_id, connection):
+                        continue
+
+                    for _ in range(5):
+                        paint_seed = fetch_paint_seed(listing['inspection_link'])
+                        if paint_seed is not None:
                             break
-                    except requests.exceptions.ProxyError:
-                        logging.warning(f"Proxy error with {proxy}, trying next proxy.")
-                    except requests.exceptions.ConnectTimeout:
-                        logging.warning(f"Timeout with proxy {proxy}, trying next proxy.")
-                    except Exception as e:
-                        logging.error(f"Other error: {e}")
-                    time.sleep(sleep_time)
-                    sleep_time += 5
+                        time.sleep(60)
+                    if paint_seed is None:
+                        raise ValueError("Paint Seed is None after 5 retries")
 
-                if response.status_code != 200:
-                    raise ValueError(f"Failed to fetch data from {url} after 5 retries")
+                    logging.info(
+                        f"{listing}")
+                    insert_listing_into_db(listing, connection)
+                    cursor = connection.cursor()
+                    cursor.execute("UPDATE listings SET paint_seed = %s WHERE listing_id = %s",
+                                   (paint_seed, listing_id))
+                    connection.commit()
+                    cursor.close()
 
-                total_count = response.json().get('total_count', 0)
-                if total_count == 0:
-                    raise ValueError(f"No listings found for quality '{quality}'.")
+                    rank = get_rank(paint_seed)
+                    if paint_seed is not None and rank is not None:
+                        market_link = construct_market_link('Desert Eagle | Heat Treated', quality)
+                        message = (
+                            f"Oferta <b>{listing_id}</b> \n"
+                            f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_dollars}</b>$\n"
+                            f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
+                            f"Inspect link: {listing['inspection_link']}"
+                        )
+                        if should_send_notification(paint_seed, quality, price_dollars):
+                            send_telegram_message(message)
 
-                max_pages = (total_count + count - 1) // count
-                logging.info(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
+                    time.sleep(fetch_paint_seed_rate_limit())
 
-                for page in range(max_pages):
-                    url = gen_market_link(start, count, quality)
-                    steam_rate_limit()
-                    sleep_time = 5
-                    for _ in range(10):
-                        proxy = get_next_proxy()
-                        try:
-                            response = requests.get(url, proxies=proxy, timeout=10)
-                            if response.status_code == 200:
-                                logging.info("Successfully fetched data.")
-                                break
-                        except requests.exceptions.ProxyError:
-                            logging.warning(f"Proxy error with {proxy}, trying next proxy.")
-                        except requests.exceptions.ConnectTimeout:
-                            logging.warning(f"Timeout with proxy {proxy}, trying next proxy.")
-                        except Exception as e:
-                            logging.error(f"Other error: {e}")
-                        time.sleep(sleep_time)
-                        sleep_time += 5
-                    if response.status_code != 200:
-                        raise ValueError(f"Failed to fetch data from {url} after 5 retries")
+                if price_dollars > 300:
+                    print("DID A BREAK")
+                    break
 
-                    listings = response_parser(response)
-                    if not listings:
-                        logging.info("No more listings found.")
-                        break  # Exit loop if no more listings are found
-
-                    for listing in listings:
-                        listing_id = listing['listing_id']
-                        price_cents = int(listing['price'])
-                        price_dollars = price_cents / 100
-
-                        if not should_process_listing(listing_id, connection):
-                            continue
-
-                        for _ in range(5):
-                            paint_seed = fetch_paint_seed(listing['inspection_link'])
-                            if paint_seed is not None:
-                                break
-                            time.sleep(60)
-                        if paint_seed is None:
-                            raise ValueError("Paint Seed is None after 5 retries")
-
-                        logging.info(
-                            f"{listing}")
-                        insert_listing_into_db(listing, connection)
-                        cursor = connection.cursor()
-                        cursor.execute("UPDATE listings SET paint_seed = %s WHERE listing_id = %s",
-                                       (paint_seed, listing_id))
-                        connection.commit()
-                        cursor.close()
-
-                        rank = get_rank(paint_seed)
-                        if paint_seed is not None and rank is not None:
-                            market_link = construct_market_link('Desert Eagle | Heat Treated', quality)
-                            message = (
-                                f"Oferta <b>{listing_id}</b> \n"
-                                f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_dollars}</b>$\n"
-                                f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
-                                f"Inspect link: {listing['inspection_link']}"
-                            )
-                            if should_send_notification(paint_seed, quality, price_dollars):
-                                send_telegram_message(message)
-
-                        time.sleep(fetch_paint_seed_rate_limit())
-
-                    # Move to the next page
-                    start += count
+                # Move to the next page
+                start += count
+                page += 1
 
             connection.close()
             error_backoff = 30 * 60
@@ -303,7 +306,7 @@ def should_send_notification(paint_seed, quality, price):
 def get_rank(paint_seed):
     rank0 = [490, 148, 69, 704]
     rank1 = [16, 48, 66, 67, 96, 111, 117, 159, 259, 263, 273, 297, 308, 321, 324, 341, 347, 461, 482, 517, 530, 567, 587, 674, 695, 723, 764, 772, 781, 790, 792, 843, 880, 885, 904, 948, 990]
-    rank2 = [109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 743, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
+    rank2 = [109, 116, 134, 158, 168, 225, 338, 354, 356, 365, 370, 386, 406, 426, 433, 441, 483, 537, 542, 592, 607, 611, 651, 668, 673, 696, 730, 820, 846, 856, 857, 870, 876, 878, 882, 898, 900, 925, 942, 946, 951, 953, 970, 998]
     if paint_seed in rank0:
         return 0
     elif paint_seed in rank1:
@@ -316,9 +319,9 @@ def get_rank(paint_seed):
 
 def get_suggested_price(rank, quality):
     suggested_prices = {
-        0: {'Factory New': 500, 'Minimal Wear': 250, 'Field-Tested': 200, 'Well-Worn': 150, 'Battle-Scarred': 100},
-        1: {'Factory New': 100, 'Minimal Wear': 80, 'Field-Tested': 70, 'Well-Worn': 60, 'Battle-Scarred': 50},
-        2: {'Factory New': 60, 'Minimal Wear': 50, 'Field-Tested': 40, 'Well-Worn': 30, 'Battle-Scarred': 20}
+        0: {'Factory New': 300, 'Minimal Wear': 150, 'Field-Tested': 120, 'Well-Worn': 100, 'Battle-Scarred': 100},
+        1: {'Factory New': 80, 'Minimal Wear': 70, 'Field-Tested': 60, 'Well-Worn': 35, 'Battle-Scarred': 30},
+        2: {'Factory New': 60, 'Minimal Wear': 40, 'Field-Tested': 25, 'Well-Worn': 15, 'Battle-Scarred': 10}
     }
     price = suggested_prices.get(rank, {}).get(quality)
     if price is None:
@@ -341,6 +344,21 @@ def get_next_proxy():
     proxy_index = (proxy_index + 1) % len(current_proxies)
 
     return proxy
+
+
+def auto_buy_skin():
+    return 'dupa'
+
+def main():
+    # db_secrets = {...}  # Ustaw swoje poświadczenia do bazy danych
+    threads = [threading.Thread(target=process_quality, args=(quality,)) for quality in qualities]
+
+    for thread in threads:
+        thread.start()
+
+
+    for thread in threads:
+        thread.join()
 
 
 if __name__ == "__main__":
