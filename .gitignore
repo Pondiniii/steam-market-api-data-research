@@ -7,5 +7,6 @@ secrets.py
 venv/
 autobuy.py
 cookies.json
-main.py.bak
 secret.json
+secret-pondinii.json
+*.maFile

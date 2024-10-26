@@ -61,10 +61,10 @@ def process_quality(quality):
             count = 100
             page = 0
             max_pages = 1
-            price_dollars = None
+            price_pln = None
             while page < max_pages:
                 url = gen_market_link(start, count, quality)
-                # steam_rate_limit()
+                steam_rate_limit()
                 response, total_count = get_proxied_request(url)
                 if page == 0:
                     max_pages = (total_count + count - 1) // count
@@ -77,10 +77,11 @@ def process_quality(quality):
 
                 for listing in listings:
                     listing_id = listing['listing_id']
-                    price_cents = int(listing['price'])
-                    price_dollars = price_cents / 100
+                    fee = int(listing['converted_fee'])
+                    price_cents = int(listing['converted_price'])
+                    price_pln = price_cents / 100
 
-                    if price_dollars > 300:
+                    if price_pln > 1200:
                         break
 
                     if not should_process_listing(listing_id, connection):
@@ -107,18 +108,19 @@ def process_quality(quality):
                     if paint_seed is not None and rank is not None:
                         market_link = construct_market_link('Desert Eagle | Heat Treated', quality)
                         message = (
-                            f"Oferta <b>{listing_id}</b> \n"
-                            f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_dollars}</b>$\n"
+                            f"Oferta <b>{listing_id}</b> | Strona: {page // 10} \n"
+                            f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_pln + fee / 100}</b>PLN\n"
                             f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
                             f"Inspect link: {listing['inspection_link']}"
                         )
-                        if should_send_notification(paint_seed, quality, price_dollars):
+
+
+                        if should_send_notification(paint_seed, quality, price_pln):
                             send_telegram_message(message)
 
                     time.sleep(fetch_paint_seed_rate_limit())
 
-                if price_dollars > 300:
-                    print("DID A BREAK")
+                if price_pln > 300:
                     break
 
                 # Move to the next page
@@ -319,9 +321,9 @@ def get_rank(paint_seed):
 
 def get_suggested_price(rank, quality):
     suggested_prices = {
-        0: {'Factory New': 300, 'Minimal Wear': 150, 'Field-Tested': 120, 'Well-Worn': 100, 'Battle-Scarred': 100},
-        1: {'Factory New': 80, 'Minimal Wear': 70, 'Field-Tested': 60, 'Well-Worn': 35, 'Battle-Scarred': 30},
-        2: {'Factory New': 60, 'Minimal Wear': 40, 'Field-Tested': 25, 'Well-Worn': 15, 'Battle-Scarred': 10}
+        0: {'Factory New': 1200, 'Minimal Wear': 600, 'Field-Tested': 500, 'Well-Worn': 400, 'Battle-Scarred': 400},
+        1: {'Factory New': 320, 'Minimal Wear': 280, 'Field-Tested': 240, 'Well-Worn': 140, 'Battle-Scarred': 120},
+        2: {'Factory New': 240, 'Minimal Wear': 160, 'Field-Tested': 100, 'Well-Worn': 60, 'Battle-Scarred': 40}
     }
     price = suggested_prices.get(rank, {}).get(quality)
     if price is None:
