@@ -17,7 +17,8 @@ def get_skinport_screenshot_link(inspect_link: str) -> str:
     else:
         raise Exception(f"Zapytanie nie powiodło się, kod statusu: {response.status_code}")
 
-inspect_link = "steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M5237255263905033132A40000951140D12605155372568308049"
-result_link = get_skinport_screenshot_link(inspect_link)
-print(result_link)
+if __name__ == "__main__":
+    inspect_link = "steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M5237255263905033132A40000951140D12605155372568308049"
+    result_link = get_skinport_screenshot_link(inspect_link)
+    print(result_link)
 

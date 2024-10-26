@@ -10,6 +10,9 @@ import asyncio
 from telegram import Bot
 import traceback
 import threading
+from autobuy import get_steam_client
+from skinport_ss import get_skinport_screenshot_link
+from steampy.models import Currency, GameOptions
 
 # Blokada synchronizująca dostęp do funkcji `get_next_proxy`
 proxy_lock = threading.Lock()
@@ -115,15 +118,24 @@ def process_quality(quality):
                     if paint_seed is not None and rank is not None:
                         market_link = construct_market_link('Desert Eagle | Heat Treated', quality)
                         message = (
-                            f"Oferta <b>{listing_id}</b> | Strona: {page // 10} \n"
+                            f"Oferta <b>{listing_id}</b> | Strona: {page} \n"
                             f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_pln + fee / 100}</b>PLN\n"
                             f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
                             f"Inspect link: {listing['inspection_link']}"
                         )
 
-
                         if should_send_notification(paint_seed, quality, price_pln):
                             send_telegram_message(message)
+                            if should_autobuy(paint_seed, quality, price_pln):
+                                try:
+                                    send_telegram_message("Auto buying...")
+                                    steam_client.market.buy_item(f'Desert Eagle | Heat Treated ({quality})',
+                                                                            listing_id, price_pln + fee, fee, GameOptions.CS,
+                                                                            Currency.PLN)
+                                    send_telegram_message(f"Autobuy successful")
+                                except Exception as e:
+                                    send_telegram_message(f"Autobuy failed: {e}")
+                            send_telegram_message(get_skinport_screenshot_link(listing['inspection_link']))
 
                     time.sleep(fetch_paint_seed_rate_limit())
 
@@ -299,8 +311,6 @@ def get_proxies():
 
 
 current_proxies = get_proxies()
-
-
 def update_proxies():
     global current_proxies
     current_proxies = get_proxies()
@@ -310,13 +320,27 @@ def update_proxies():
         time.sleep(30 * 60)  # Update every 30 minutes
 
 
-def should_send_notification(paint_seed, quality, price):
+def get_suggested_price_autobuy(rank, quality):
+    """AUTOBUY"""
+    suggested_prices = {
+        0: {'Factory New': 500, 'Minimal Wear': 300, 'Field-Tested': 250, 'Well-Worn': 200, 'Battle-Scarred': 150},
+        1: {'Factory New': 250, 'Minimal Wear': 160, 'Field-Tested': 100, 'Well-Worn': 50, 'Battle-Scarred': 40},
+        2: {'Factory New': 80, 'Minimal Wear': 35, 'Field-Tested': 20, 'Well-Worn': 12, 'Battle-Scarred': 10}
+    }
+    price = suggested_prices.get(rank, {}).get(quality)
+    if price is None:
+        logging.warning(f"No suggested price found for rank {rank} and quality {quality}")
+    return price
+
+
+def should_autobuy(paint_seed, quality, price):
+    """AUTOBUY"""
     rank = get_rank(paint_seed)
     if rank is None:
-        return False  # Do not send notification for paint seeds not in any rank
-    suggested_price = get_suggested_price(rank, quality)
+        return False
+    suggested_price = get_suggested_price_autobuy(rank, quality)
     if suggested_price is None:
-        return False  # Invalid quality or rank
+        return False
     return price <= suggested_price
 
 
@@ -346,6 +370,16 @@ def get_suggested_price(rank, quality):
     return price
 
 
+def should_send_notification(paint_seed, quality, price):
+    rank = get_rank(paint_seed)
+    if rank is None:
+        return False  # Do not send notification for paint seeds not in any rank
+    suggested_price = get_suggested_price(rank, quality)
+    if suggested_price is None:
+        return False  # Invalid quality or rank
+    return price <= suggested_price
+
+
 proxy_index = 0
 def get_next_proxy():
     global proxy_index
@@ -364,7 +398,10 @@ def get_next_proxy():
 
 
 def main():
-    # db_secrets = {...}  # Ustaw swoje poświadczenia do bazy danych
+    global steam_client
+    steam_client = get_steam_client()
+    print(steam_client.is_session_alive())
+
     threads = [threading.Thread(target=process_quality, args=(quality,)) for quality in qualities]
 
     for thread in threads:
