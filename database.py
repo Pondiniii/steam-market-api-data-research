@@ -24,7 +24,7 @@ def should_process_listing(listing_id, connection):
 def insert_listing_into_db(listing, connection):
     listing_id = listing['listing_id']
     asset_id = listing['asset_id']
-    price = listing['price']
+    price = listing['converted_price']
     inspection_link = listing['inspection_link']
     paint_seed = None  # Initialize with None, to be updated later
 

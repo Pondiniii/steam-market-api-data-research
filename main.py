@@ -26,18 +26,26 @@ def get_proxied_request(url):
         proxy = get_next_proxy()
         try:
             response = requests.get(url, proxies=proxy, timeout=10)
-            total_count = response.json().get('total_count', 0)
-            if response.status_code == 200 and total_count != 0:
-                logging.info(f"Successfully fetched data {total_count}")
-                break
+            if response.status_code == 200:
+                # Sprawdzenie czy response.json() zwraca poprawne dane
+                data = response.json()
+                if data is not None:
+                    total_count = data.get('total_count', 0)
+                else:
+                    logging.warning("Received empty JSON response.")
 
-            if response.status_code != 200:
-                raise ValueError(f"Failed to fetch data from {url} after 5 retries")
+                if total_count != 0:
+                    logging.info(f"Successfully fetched data {total_count}")
+                    break
+            else:
+                raise ValueError(f"Unexpected status code {response.status_code} from {url}")
 
         except requests.exceptions.ProxyError:
             logging.warning(f"Proxy error with {proxy}, trying next proxy.")
         except requests.exceptions.ConnectTimeout:
             logging.warning(f"Timeout with proxy {proxy}, trying next proxy.")
+        except ValueError as ve:
+            logging.error(ve)
         except Exception as e:
             logging.error(f"Other error: {e}")
 
@@ -45,7 +53,6 @@ def get_proxied_request(url):
         sleep_time += 5
 
     return response, total_count
-
 
 
 def process_quality(quality):
@@ -69,7 +76,7 @@ def process_quality(quality):
                 if page == 0:
                     max_pages = (total_count + count - 1) // count
                     logging.info(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
-
+                logging.info(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
                 listings = response_parser(response)
                 if not listings:
                     logging.info("No more listings found.")
@@ -170,7 +177,7 @@ logger.setLevel(logging.INFO)
 
 steam_last_request_time = 0
 def steam_rate_limit():
-    # Rate limit: new request every 5 seconds
+    # Global Rate limit every 250 ms
     global steam_last_request_time
     current_time = time.time()
     elapsed_time = current_time - steam_last_request_time
@@ -198,25 +205,33 @@ def fetch_paint_seed_rate_limit():
 
 
 def fetch_paint_seed(inspection_link):
-    try:
-        encoded_link = urllib.parse.quote(inspection_link, safe='')
-        api_url = f"http://localhost:80/?url={encoded_link}"
-        response = requests.get(api_url)
-        if response.status_code != 200:
-            logging.error(f"Error fetching paint_seed for {inspection_link}")
-            return None
+    retry_limit = 5
+    sleep_time = 1
 
-        data = response.json()
-        # Return only the paint_seed from the response if available
-        if 'iteminfo' in data and 'paintseed' in data['iteminfo']:
-            return data['iteminfo']['paintseed']
-        else:
-            logging.error(f"No paint_seed found for {inspection_link}")
-            return None
+    for attempt in range(retry_limit):
+        try:
+            encoded_link = urllib.parse.quote(inspection_link, safe='')
+            api_url = f"http://localhost:80/?url={encoded_link}"
+            response = requests.get(api_url)
 
-    except Exception as e:
-        logging.error(f"Error in fetch_paint_seed: {e}")
-        return None
+            if response.status_code == 200:
+                data = response.json()
+                if 'iteminfo' in data and 'paintseed' in data['iteminfo']:
+                    return data['iteminfo']['paintseed']
+                else:
+                    logging.error(f"No paint_seed found for {inspection_link}")
+                    return None
+            else:
+                logging.error(f"Error fetching paint_seed for {inspection_link}, status code: {response.status_code}")
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error in fetch_paint_seed attempt {attempt + 1}: {e}")
+
+        time.sleep(sleep_time)
+        sleep_time += 1
+
+    logging.error(f"Failed to fetch paint_seed after {retry_limit} attempts for {inspection_link}")
+    return None
 
 
 async def send_telegram_message_async(message):
@@ -347,9 +362,6 @@ def get_next_proxy():
 
     return proxy
 
-
-def auto_buy_skin():
-    return 'dupa'
 
 def main():
     # db_secrets = {...}  # Ustaw swoje poświadczenia do bazy danych
