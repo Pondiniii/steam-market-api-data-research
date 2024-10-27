@@ -5,7 +5,6 @@ env/
 .idea
 secrets.py
 venv/
-autobuy.py
 cookies.json
 secret.json
 secret-pondinii.json

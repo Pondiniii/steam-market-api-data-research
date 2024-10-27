@@ -14,6 +14,10 @@ from autobuy import get_steam_client
 from skinport_ss import get_skinport_screenshot_link
 from steampy.models import Currency, GameOptions
 
+# todo 429 replace proxy if error rate >25%
+# 2024-10-27 19:02:51,451 [ERROR]: Error fetching paint_seed for steam://rungame/730/76561202255233023/+csgo_econ_action_preview%20M5234964356227012280A39835515725D14151585877755586761, status
+# code: 400
+
 # Blokada synchronizująca dostęp do funkcji `get_next_proxy`
 proxy_lock = threading.Lock()
 
@@ -118,8 +122,8 @@ def process_quality(quality):
                     if paint_seed is not None and rank is not None:
                         market_link = construct_market_link('Desert Eagle | Heat Treated', quality)
                         message = (
-                            f"Oferta <b>{listing_id}</b> | Strona: {page} \n"
-                            f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_pln + fee / 100}</b>PLN\n"
+                            f"Oferta <b>{listing_id}</b> | Strona: {page + 1} \n"
+                            f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_pln + fee / 100}</b> PLN\n"
                             f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
                             f"Inspect link: {listing['inspection_link']}"
                         )
@@ -128,7 +132,8 @@ def process_quality(quality):
                             send_telegram_message(message)
                             if should_autobuy(paint_seed, quality, price_pln):
                                 try:
-                                    send_telegram_message("Auto buying...")
+                                    send_telegram_message(f"Auto buying: Desert Eagle | Heat Treated ({quality}) \n"
+                                                          f"price + fee: {price_pln + fee} fee: {fee}")
                                     steam_client.market.buy_item(f'Desert Eagle | Heat Treated ({quality})',
                                                                             listing_id, price_pln + fee, fee, GameOptions.CS,
                                                                             Currency.PLN)
@@ -219,6 +224,7 @@ def fetch_paint_seed_rate_limit():
 def fetch_paint_seed(inspection_link):
     retry_limit = 5
     sleep_time = 1
+    successful_fetch = False  # Zmienna do śledzenia sukcesu po błędach
 
     for attempt in range(retry_limit):
         try:
@@ -229,21 +235,29 @@ def fetch_paint_seed(inspection_link):
             if response.status_code == 200:
                 data = response.json()
                 if 'iteminfo' in data and 'paintseed' in data['iteminfo']:
+                    # Jeśli próba nie jest pierwsza, zaloguj sukces po błędzie
+                    if attempt > 0:
+                        logging.info(f"Retry successful on attempt {attempt + 1} 😀😀😀 for {inspection_link}")
+                    successful_fetch = True
                     return data['iteminfo']['paintseed']
                 else:
                     logging.error(f"No paint_seed found for {inspection_link}")
                     return None
             else:
-                logging.error(f"Error fetching paint_seed for {inspection_link}, status code: {response.status_code}")
+                logging.error(f"Error fetching paint_seed for {inspection_link}, attempt {attempt + 1}, status code: {response.status_code}")
 
         except requests.exceptions.RequestException as e:
             logging.error(f"Error in fetch_paint_seed attempt {attempt + 1}: {e}")
 
+        # Poczekaj przed następną próbą
         time.sleep(sleep_time)
         sleep_time += 1
 
-    logging.error(f"Failed to fetch paint_seed after {retry_limit} attempts for {inspection_link}")
+    # Wyświetlenie loga po zakończeniu wszystkich prób
+    if not successful_fetch:
+        logging.error(f"Failed to fetch paint_seed after {retry_limit} attempts for {inspection_link}")
     return None
+
 
 
 async def send_telegram_message_async(message):
@@ -397,6 +411,22 @@ def get_next_proxy():
     return proxy
 
 
+def check_steam_login():
+    time.sleep(30)
+    logging.info("Starting steam login validator thread")
+    while True:
+        try:
+            if not steam_client.is_session_alive():
+                send_telegram_message("Steam login session expired. Please log in again.")
+                time.sleep(6 * 3600) # sleep na 6h
+            logging.info("Steam login session is active.💗💗💗 Ready to buy shit!")
+        except Exception as e:
+            logging.error(f"Error checking login status: {e}")
+            send_telegram_message(f"Steam Login Error {e}")
+
+        time.sleep(900) # sleep 15min
+
+
 def main():
     global steam_client
     steam_client = get_steam_client()
@@ -414,5 +444,8 @@ def main():
 
 if __name__ == "__main__":
     threading.Thread(target=update_proxies, daemon=True).start()
+    threading.Thread(target=check_steam_login, daemon=True).start()
+
     main()
+
 
