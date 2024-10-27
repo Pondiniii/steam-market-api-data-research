@@ -19,6 +19,7 @@ from steampy.models import Currency, GameOptions
 # code: 400
 
 # Blokada synchronizująca dostęp do funkcji `get_next_proxy`
+fetch_paint_seed_lock = threading.Lock()
 proxy_lock = threading.Lock()
 
 # Lista jakości do przetworzenia
@@ -224,34 +225,41 @@ def fetch_paint_seed_rate_limit():
 def fetch_paint_seed(inspection_link):
     retry_limit = 5
     sleep_time = 1
-    successful_fetch = False  # Zmienna do śledzenia sukcesu po błędach
+    successful_fetch = False
 
-    for attempt in range(retry_limit):
-        try:
-            encoded_link = urllib.parse.quote(inspection_link, safe='')
-            api_url = f"http://localhost:80/?url={encoded_link}"
-            response = requests.get(api_url)
+    # Użycie locka do zablokowania dostępu do funkcji
+    with fetch_paint_seed_lock:
+        for attempt in range(retry_limit):
+            try:
+                encoded_link = urllib.parse.quote(inspection_link, safe='')
+                api_url = f"http://localhost:80/?url={encoded_link}"
+                response = requests.get(api_url)
 
-            if response.status_code == 200:
-                data = response.json()
-                if 'iteminfo' in data and 'paintseed' in data['iteminfo']:
-                    # Jeśli próba nie jest pierwsza, zaloguj sukces po błędzie
-                    if attempt > 0:
-                        logging.info(f"Retry successful on attempt {attempt + 1} 😀😀😀 for {inspection_link}")
-                    successful_fetch = True
-                    return data['iteminfo']['paintseed']
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'iteminfo' in data and 'paintseed' in data['iteminfo']:
+                        if attempt > 0:
+                            logging.info(f"Retry successful on attempt {attempt + 1} for {inspection_link}")
+                        successful_fetch = True
+                        return data['iteminfo']['paintseed']
+                    else:
+                        logging.error(f"No paint_seed found for {inspection_link}")
+                        return None
                 else:
-                    logging.error(f"No paint_seed found for {inspection_link}")
-                    return None
-            else:
-                logging.error(f"Error fetching paint_seed for {inspection_link}, attempt {attempt + 1}, status code: {response.status_code}")
+                    logging.error(f"Error fetching paint_seed for {inspection_link}, status code: {response.status_code}")
 
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Error in fetch_paint_seed attempt {attempt + 1}: {e}")
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Error in fetch_paint_seed attempt {attempt + 1}: {e}")
 
-        # Poczekaj przed następną próbą
-        time.sleep(sleep_time)
-        sleep_time += 1
+            # Czas między próbami
+            time.sleep(sleep_time)
+            sleep_time += 1
+
+        # Jeśli wszystkie próby zakończą się niepowodzeniem
+        if not successful_fetch:
+            logging.error(f"Failed to fetch paint_seed after {retry_limit} attempts for {inspection_link}")
+        return None
+
 
     # Wyświetlenie loga po zakończeniu wszystkich prób
     if not successful_fetch:
