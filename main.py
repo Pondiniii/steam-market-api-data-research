@@ -43,10 +43,10 @@ def get_proxied_request(url):
                     logging.warning("Received empty JSON response.")
 
                 if total_count != 0:
-                    logging.info(f"Successfully fetched data {total_count}")
+                    # logging.info(f"Successfully fetched data {total_count}")
                     break
             else:
-                raise ValueError(f"Unexpected status code {response.status_code} from {url}")
+                raise ValueError(f"Unexpected status code {response.status_code} from {url} proxy: {proxy}")
 
         except requests.exceptions.ProxyError:
             logging.warning(f"Proxy error with {proxy}, trying next proxy.")
@@ -84,7 +84,6 @@ def process_quality(quality):
                 if page == 0:
                     max_pages = (total_count + count - 1) // count
                     logging.info(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
-                logging.info(f"Quality: {quality}. Total listings: {total_count}. Total pages to process: {max_pages}")
                 listings = response_parser(response)
                 if not listings:
                     logging.info("No more listings found.")
@@ -124,7 +123,7 @@ def process_quality(quality):
                         market_link = construct_market_link('Desert Eagle | Heat Treated', quality)
                         message = (
                             f"Oferta <b>{listing_id}</b> | Strona: {page + 1} \n"
-                            f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{price_pln + fee / 100}</b> PLN\n"
+                            f"Paint Seed: <b>{paint_seed}</b> ({get_rank(paint_seed)}) | Cena: <b>{round(price_pln + fee / 100, 2)}</b> PLN\n"
                             f"Jakość: <i><a href=\"{market_link}\">{quality}</a></i> | "
                             f"Inspect link: {listing['inspection_link']}"
                         )
@@ -201,7 +200,7 @@ def steam_rate_limit():
     elapsed_time = current_time - steam_last_request_time
     if elapsed_time < 0.25:
         sleep_time = 0.25 - elapsed_time
-        logging.info(f"Waiting {sleep_time:.2f} seconds before the next Steam API request.")
+        # logging.info(f"Waiting {sleep_time:.2f} seconds before the next Steam API request.")
         time.sleep(sleep_time)
     steam_last_request_time = time.time()
 
@@ -438,7 +437,6 @@ def check_steam_login():
 def main():
     global steam_client
     steam_client = get_steam_client()
-    print(steam_client.is_session_alive())
 
     threads = [threading.Thread(target=process_quality, args=(quality,)) for quality in qualities]
 
