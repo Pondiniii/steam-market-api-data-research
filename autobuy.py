@@ -27,4 +27,8 @@ def get_steam_client():
 if __name__ == "__main__":
     steam_client = get_steam_client()
     print(steam_client.is_session_alive())
+    import time
+    time.sleep(10)
+    steam_client = get_steam_client()
+    print(steam_client.is_session_alive())
     # response = steam_client.market.buy_item('G3SG1 | Desert Storm (Field-Tested)', '5229334856688702417', 6, 2, GameOptions.CS, Currency.PLN)

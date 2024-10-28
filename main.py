@@ -22,6 +22,8 @@ from steampy.models import Currency, GameOptions
 fetch_paint_seed_lock = threading.Lock()
 proxy_lock = threading.Lock()
 
+steam_client = None
+
 # Lista jakości do przetworzenia
 qualities = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle-Scarred']
 
@@ -338,7 +340,7 @@ def update_proxies():
     while True:
         current_proxies = get_proxies()
         logging.info("Proxy list updated.")
-        time.sleep(30 * 60)  # Update every 30 minutes
+        time.sleep(15 * 60)  # Update every 15 minutes
 
 
 def get_suggested_price_autobuy(rank, quality):
@@ -346,7 +348,7 @@ def get_suggested_price_autobuy(rank, quality):
     suggested_prices = {
         0: {'Factory New': 500, 'Minimal Wear': 300, 'Field-Tested': 250, 'Well-Worn': 200, 'Battle-Scarred': 150},
         1: {'Factory New': 250, 'Minimal Wear': 160, 'Field-Tested': 100, 'Well-Worn': 50, 'Battle-Scarred': 40},
-        2: {'Factory New': 80, 'Minimal Wear': 35, 'Field-Tested': 20, 'Well-Worn': 12, 'Battle-Scarred': 10}
+        2: {'Factory New': 100, 'Minimal Wear': 60, 'Field-Tested': 45, 'Well-Worn': 20, 'Battle-Scarred': 15}
     }
     price = suggested_prices.get(rank, {}).get(quality)
     if price is None:
@@ -419,19 +421,29 @@ def get_next_proxy():
 
 
 def check_steam_login():
-    time.sleep(30)
+    global steam_client
+    time.sleep(30) # time before first run
     logging.info("Starting steam login validator thread")
     while True:
         try:
             if not steam_client.is_session_alive():
-                send_telegram_message("Steam login session expired. Please log in again.")
-                time.sleep(6 * 3600) # sleep na 6h
-            logging.info("Steam login session is active.💗💗💗 Ready to buy shit!")
+                send_telegram_message("Steam login session expired. Attempting to re-login.")
+                steam_client = get_steam_client()
+
+                if not steam_client or not steam_client.is_session_alive():
+                    send_telegram_message("Critical error: Unable to re-login. Retrying in 2 hours.")
+                    time.sleep(2 * 3600)
+                else:
+                    send_telegram_message("Auto-relogin successful. Steam session is now active. Ready to buy Shit!")
+                    logging.info("Auto-relogin successful. Steam session is now active.")
+            else:
+                logging.info("Steam login session is active. 💗💗💗 Ready to buy!")
+
         except Exception as e:
             logging.error(f"Error checking login status: {e}")
-            send_telegram_message(f"Steam Login Error {e}")
+            send_telegram_message(f"Steam Login Error: {e}")
 
-        time.sleep(900) # sleep 15min
+        time.sleep(15 * 60)
 
 
 def main():
@@ -446,6 +458,7 @@ def main():
 
     for thread in threads:
         thread.join()
+
 
 
 if __name__ == "__main__":
