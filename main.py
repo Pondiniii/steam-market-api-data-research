@@ -135,7 +135,7 @@ def process_quality(quality):
                             if should_autobuy(paint_seed, quality, price_pln):
                                 try:
                                     send_telegram_message(f"Auto buying: Desert Eagle | Heat Treated ({quality}) \n"
-                                                          f"price + fee: {price_cents+ fee} fee: {fee}")
+                                                          f"price + fee: {price_cents + fee} fee: {fee}")
                                     steam_client.market.buy_item(f'Desert Eagle | Heat Treated ({quality})',
                                                                             listing_id, price_cents + fee, fee, GameOptions.CS,
                                                                             Currency.PLN)
