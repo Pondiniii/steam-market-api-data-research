@@ -346,9 +346,9 @@ def update_proxies():
 def get_suggested_price_autobuy(rank, quality):
     """AUTOBUY"""
     suggested_prices = {
-        0: {'Factory New': 500, 'Minimal Wear': 300, 'Field-Tested': 250, 'Well-Worn': 200, 'Battle-Scarred': 150},
-        1: {'Factory New': 250, 'Minimal Wear': 160, 'Field-Tested': 100, 'Well-Worn': 50, 'Battle-Scarred': 40},
-        2: {'Factory New': 100, 'Minimal Wear': 60, 'Field-Tested': 45, 'Well-Worn': 20, 'Battle-Scarred': 15}
+        0: {'Factory New': 600, 'Minimal Wear': 360, 'Field-Tested': 300, 'Well-Worn': 240, 'Battle-Scarred': 180},
+        1: {'Factory New': 300, 'Minimal Wear': 192, 'Field-Tested': 120, 'Well-Worn': 60, 'Battle-Scarred': 48},
+        2: {'Factory New': 120, 'Minimal Wear': 72, 'Field-Tested': 54, 'Well-Worn': 24, 'Battle-Scarred': 18}
     }
     price = suggested_prices.get(rank, {}).get(quality)
     if price is None:
@@ -383,9 +383,9 @@ def get_rank(paint_seed):
 
 def get_suggested_price(rank, quality):
     suggested_prices = {
-        0: {'Factory New': 1200, 'Minimal Wear': 600, 'Field-Tested': 500, 'Well-Worn': 400, 'Battle-Scarred': 400},
-        1: {'Factory New': 320, 'Minimal Wear': 280, 'Field-Tested': 240, 'Well-Worn': 140, 'Battle-Scarred': 120},
-        2: {'Factory New': 240, 'Minimal Wear': 160, 'Field-Tested': 100, 'Well-Worn': 60, 'Battle-Scarred': 40}
+        0: {'Factory New': 1440, 'Minimal Wear': 720, 'Field-Tested': 600, 'Well-Worn': 480, 'Battle-Scarred': 480},
+        1: {'Factory New': 384, 'Minimal Wear': 336, 'Field-Tested': 288, 'Well-Worn': 168, 'Battle-Scarred': 153},
+        2: {'Factory New': 288, 'Minimal Wear': 192, 'Field-Tested': 120, 'Well-Worn': 72, 'Battle-Scarred': 48}
     }
     price = suggested_prices.get(rank, {}).get(quality)
     if price is None:
